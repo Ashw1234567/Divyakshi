@@ -27,7 +27,7 @@
   --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: 100%; overscroll-behavior: none; }
 body {
   margin: 0;
   background: var(--night);
@@ -56,25 +56,25 @@ p { margin: 0; }
 
 /* ---------- Nav + music ---------- */
 .nav {
-  position: fixed; z-index: 60; left: 50%; transform: translateX(-50%);
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  display: flex; align-items: center; gap: 10px; padding: 8px;
-  background: rgba(12, 12, 18, 0.78); border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  max-width: calc(100% - 24px);
+  position: fixed; z-index: 60; right: max(8px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 0; padding: 6px 2px;
+  background: rgba(12, 12, 18, 0.6); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
-.nbtn {
-  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
-  background: rgba(255, 255, 255, 0.12); color: #fff; display: grid; place-items: center;
-  transition: background 0.2s ease, transform 0.15s ease;
+.nbtn { display: none; }
+.dots { display: flex; flex-direction: column; }
+.dot { width: 24px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.dot::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); transition: background 0.25s ease, height 0.25s ease; }
+.dot.on::after { background: var(--accent); height: 18px; border-radius: 99px; }
+.sh {
+  position: fixed; z-index: 59; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; pointer-events: none;
+  background: rgba(12, 12, 18, 0.72); color: #fff; font: 600 0.8rem/1 var(--font-body); letter-spacing: 0.04em;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: opacity 0.4s ease;
 }
-.nbtn:hover { background: rgba(255, 255, 255, 0.22); transform: scale(1.05); }
-.nbtn:disabled { opacity: 0.3; cursor: default; transform: none; }
-.nbtn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.dots { display: flex; }
-.dot { width: 22px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
-.dot::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); transition: background 0.25s ease, width 0.25s ease; }
-.dot.on::after { background: var(--accent); width: 18px; border-radius: 99px; }
+.sh i { font-style: normal; display: inline-block; animation: nudge 1.4s ease-in-out infinite; }
+.sh.off { opacity: 0; }
+@keyframes nudge { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(3px); } }
 .mp {
   position: fixed; z-index: 61;
   top: calc(12px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
@@ -314,12 +314,11 @@ canvas#stars { position: absolute; inset: 0; width: 100%; height: 100%; }
 .lb .lnote { max-width: 40ch; color: #c3c7e6; font-size: 0.98rem; }
 
 @media (max-width: 720px) {
-  .nav { gap: 6px; padding: 6px; }
-  .dot { width: 18px; }
+  .dot { width: 20px; height: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .scene { transition: none; }
-  .bfly, .mesh i, .mp.on .eq i, .b, .intro, .chat { animation: none; }
+  .bfly, .mesh i, .mp.on .eq i, .b, .intro, .chat, .sh i { animation: none; }
   .diya .fl, .days, .leaf, .book, .pol { transition: none; animation: none; }
 }
 [hidden]{display:none!important}
@@ -581,6 +580,8 @@ img{max-width:100%}
   </div>
 </section>
 
+<div class="sh" id="sh" aria-hidden="true"><span id="shT">Scroll</span><i>&#8595;</i></div>
+
 <!-- Nav -->
 <nav class="nav" aria-label="Scenes">
   <button type="button" class="nbtn" id="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -796,6 +797,7 @@ var PHOTOS = [{"src": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA
     cur = i;
     scenes.forEach(function (s, k) { s.classList.toggle('active', k === i); s.setAttribute('aria-hidden', k === i ? 'false' : 'true'); try { s.inert = k !== i; } catch (e) {} });
     dots.forEach(function (d, k) { d.classList.toggle('on', k === i); });
+    $('sh').classList.toggle('off', i === scenes.length - 1);
     prevB.disabled = i === 0; nextB.disabled = i === scenes.length - 1;
     if (hooks[i] && hooks[i].enter) hooks[i].enter();
   }
@@ -804,9 +806,51 @@ var PHOTOS = [{"src": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { closeLb(); return; }
     if (!lb.hidden) return;
-    if (e.key === 'ArrowRight') nextB.click();
-    if (e.key === 'ArrowLeft') prevB.click();
+    var tg = (e.target && e.target.tagName) || '';
+    if (/INPUT|TEXTAREA/.test(tg)) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') nextB.click();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') prevB.click();
   });
+
+  /* ---------- Scroll / swipe to change scene ---------- */
+  var touchy = window.matchMedia('(pointer: coarse)').matches;
+  $('shT').textContent = touchy ? 'Swipe up' : 'Scroll';
+  function canInner(el, dy) {
+    for (; el && el !== document.body && el.nodeType === 1; el = el.parentElement) {
+      var cs = getComputedStyle(el);
+      if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+        if (dy > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+        if (dy < 0 && el.scrollTop > 0) return true;
+      }
+    }
+    return false;
+  }
+  function stepScene(dir) { if (dir > 0) nextB.click(); else prevB.click(); }
+  var wLock = 0, wAcc = 0;
+  window.addEventListener('wheel', function (e) {
+    if (!lb.hidden) return;
+    var now = Date.now();
+    if (canInner(e.target, e.deltaY)) return;
+    e.preventDefault();
+    if (now < wLock) { wLock = Math.max(wLock, now + 160); return; }
+    wAcc += e.deltaY;
+    if (Math.abs(wAcc) < 30) return;
+    var dir = wAcc > 0 ? 1 : -1; wAcc = 0; wLock = now + (reduce ? 300 : 900);
+    stepScene(dir);
+  }, { passive: false });
+  var tY = 0, tX = 0, tUp = false, tDown = false, tOn = false;
+  window.addEventListener('touchstart', function (e) {
+    if (!lb.hidden || e.touches.length !== 1) { tOn = false; return; }
+    tOn = true; tY = e.touches[0].clientY; tX = e.touches[0].clientX;
+    tUp = canInner(e.target, 1); tDown = canInner(e.target, -1);
+  }, { passive: true });
+  window.addEventListener('touchend', function (e) {
+    if (!tOn || !e.changedTouches.length) return; tOn = false;
+    var dy = tY - e.changedTouches[0].clientY, dx = tX - e.changedTouches[0].clientX;
+    if (Math.abs(dy) < 60 || Math.abs(dy) < Math.abs(dx) * 1.2) return;
+    if ((dy > 0 && tUp) || (dy < 0 && tDown)) return;
+    stepScene(dy > 0 ? 1 : -1);
+  }, { passive: true });
 
   /* ---------- 1 Diya ---------- */
   var s0 = $('s0'), turned = false;
