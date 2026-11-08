@@ -297,6 +297,10 @@ canvas#stars { position: absolute; inset: 0; width: 100%; height: 100%; }
 .ncard { padding: 12px 16px 14px; border-radius: 14px; background: var(--paper); color: var(--ink); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35); }
 .ncard small { display: block; font: 700 0.66rem/1 var(--font-body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .ncard p { font: 600 1.35rem/1.2 var(--font-hand); white-space: pre-wrap; overflow-wrap: anywhere; }
+.nlocal { display: flex; flex-direction: column; gap: 8px; }
+.nlocal label { font: 700 0.72rem/1 var(--font-body); letter-spacing: 0.14em; text-transform: uppercase; color: #c9a98a; margin-top: 8px; }
+.nlocal textarea { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: #fff; font: 500 14px/1.4 var(--font-body); word-break: break-all; }
+.nbtn2.alt { background: rgba(255, 255, 255, 0.14); }
 .nempty { text-align: center; color: #a89a8e; font-size: 0.9rem; }
 
 /* ---------- Photo viewer ---------- */
@@ -522,7 +526,7 @@ img{max-width:100%}
   <div class="nwrap">
     <p class="eyebrow">Our notes</p>
     <h2>Write something for each other</h2>
-    <p class="lede">Put your name, then write what you love about the other person. Once you have written yours, you can read theirs below.</p>
+    <p class="lede">Put your name, then write what you love about the other person. Then you can read theirs.</p>
     <form class="nform" id="nForm" autocomplete="off" hidden>
       <label for="nName">Your name</label>
       <input id="nName" maxlength="30" placeholder="Divyakshi or Ashwin" required>
@@ -530,7 +534,14 @@ img{max-width:100%}
       <textarea id="nText" maxlength="700" placeholder="Write anything: what you love, a memory, a promise..." required></textarea>
       <div class="row"><button type="submit" class="nbtn2" id="nSave">Save my note</button><span class="nstatus" id="nStatus" role="status" aria-live="polite"></span></div>
     </form>
-    <p class="nempty" id="nOffline" hidden>Notes only work on the shared link, when you are signed in to Claude. Open that link on your phone to write yours.</p>
+    <div class="nlocal" id="nLocal" hidden>
+      <p class="lede" id="nSendLede" hidden>Saved. Now send this code to the other person on WhatsApp or text.</p>
+      <textarea id="nCode" readonly rows="3" hidden></textarea>
+      <div class="row" id="nSendRow" hidden><button type="button" class="nbtn2" id="nCopy">Copy my note code</button><button type="button" class="nbtn2 alt" id="nShare" hidden>Share</button></div>
+      <label for="nPaste">Got a code from the other person? Paste it here</label>
+      <textarea id="nPaste" rows="3" placeholder="Paste their note code"></textarea>
+      <div class="row"><button type="button" class="nbtn2" id="nRead">Read their note</button><span class="nstatus" id="nReadStatus" role="status" aria-live="polite"></span></div>
+    </div>
     <p class="nempty" id="nLoading">Loading notes...</p>
     <div class="nlist" id="nList"></div>
   </div>
@@ -1059,9 +1070,52 @@ var PHOTOS = [{"src": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA
 
   /* ---------- Notes for each other (shared db, signed-in viewers) ---------- */
   var nDb = null, nId = null, nFilled = false;
-  function nFallback() {
-    notesGate = false; $('nLoading').hidden = true; $('nForm').hidden = true; $('nOffline').hidden = false;
+  var localMode = false, LS = 'divyakshi-notes-v1';
+  function lsGet(k) { try { return window.localStorage.getItem(LS + k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { window.localStorage.setItem(LS + k, v); } catch (e) {} }
+  function enc(o) { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))); }
+  function dec(s) { return JSON.parse(decodeURIComponent(escape(atob(s.replace(/\s+/g, ''))))); }
+  var localMine = null, localTheirs = null;
+  function showCode() {
+    if (!localMine) return;
+    $('nCode').value = enc(localMine); $('nCode').hidden = false; $('nSendRow').hidden = false; $('nSendLede').hidden = false;
+    if (navigator.share) $('nShare').hidden = false;
   }
+  function localRender() {
+    var list = $('nList'); list.innerHTML = '';
+    function card(label, v) {
+      var c = document.createElement('div'); c.className = 'ncard';
+      var s = document.createElement('small'); s.textContent = label;
+      var p = document.createElement('p'); p.textContent = v.t || '';
+      c.appendChild(s); c.appendChild(p); list.appendChild(c);
+    }
+    if (localTheirs) card('From ' + (localTheirs.n || 'someone'), localTheirs);
+    if (localMine) card('Your note', localMine);
+  }
+  function nFallback() {
+    if (localMode) return;
+    localMode = true; nDb = null;
+    $('nLoading').hidden = true; $('nForm').hidden = false; $('nLocal').hidden = false;
+    $('nSave').textContent = 'Save my note';
+    try { var a = lsGet('mine'), b = lsGet('theirs'); if (a) localMine = JSON.parse(a); if (b) localTheirs = JSON.parse(b); } catch (e) {}
+    if (localMine) { $('nName').value = localMine.n; $('nText').value = localMine.t; $('nSave').textContent = 'Update my note'; showCode(); }
+    notesGate = !localMine; localRender();
+  }
+  $('nCopy').addEventListener('click', function () {
+    var v = $('nCode').value;
+    function done() { $('nCopy').textContent = 'Copied'; setTimeout(function () { $('nCopy').textContent = 'Copy my note code'; }, 1800); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done, function () { $('nCode').select(); document.execCommand('copy'); done(); });
+    else { $('nCode').select(); try { document.execCommand('copy'); } catch (e) {} done(); }
+  });
+  $('nShare').addEventListener('click', function () { try { navigator.share({ text: $('nCode').value }); } catch (e) {} });
+  $('nRead').addEventListener('click', function () {
+    try {
+      var o = dec($('nPaste').value);
+      if (!o || typeof o.t !== 'string') throw 0;
+      localTheirs = { n: String(o.n || '').slice(0, 30), t: String(o.t).slice(0, 700) };
+      lsSet('theirs', JSON.stringify(localTheirs)); $('nReadStatus').textContent = ''; localRender();
+    } catch (e) { $('nReadStatus').textContent = 'That code does not look right. Paste the whole thing.'; }
+  });
   function nRender(docs) {
     $('nLoading').hidden = true; $('nForm').hidden = false;
     var list = $('nList'); list.innerHTML = '';
@@ -1097,6 +1151,12 @@ var PHOTOS = [{"src": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA
   $('nForm').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     var name = $('nName').value.trim(), text = $('nText').value.trim();
+    if (localMode) {
+      if (!name || !text) return;
+      localMine = { n: name.slice(0, 30), t: text.slice(0, 700) }; lsSet('mine', JSON.stringify(localMine));
+      notesGate = false; $('nSave').textContent = 'Update my note'; $('nStatus').textContent = 'Saved.'; showCode(); localRender();
+      burst(window.innerWidth / 2, window.innerHeight * 0.5, 40); return;
+    }
     if (!name || !text || !nDb || !nId) return;
     $('nSave').disabled = true; $('nStatus').textContent = 'Saving...';
     try {
